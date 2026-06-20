@@ -6,16 +6,16 @@ HEIGHT = 0.6  # Height of the bearing in cm (6mm)
 ball_diameter = 0.45  # Ball diameter in cm (4.5mm)
 offset_towards_z = 0.1
 outer_housing_outer_dia = 3.0
-outer_housing_thickness = 0.25
+outer_housing_thickness = 0.3
 outer_housing_inner_dia = outer_housing_outer_dia - 2*outer_housing_thickness
 offset_for_revolte_cut = 0.1
 inner_housing_thickness = 0.2
-inner_housing_outer_dia = outer_housing_inner_dia - 0.3*2
-inner_housing_inner_dia = inner_housing_outer_dia - 2*inner_housing_thickness
+inner_housing_outer_dia = outer_housing_inner_dia - 0.22*2
+max_inner_housing_inner_dia = inner_housing_outer_dia - 2*inner_housing_thickness
 min_gap_between_separater_holes = 0.5
-separater_hole_diameter = ball_diameter - 0.2
+separater_hole_diameter = ball_diameter - 0.21
 cork_hole_diameter = ball_diameter+0.07
-cork_cap_diameter = cork_hole_diameter-0.03
+cork_cap_diameter = cork_hole_diameter-0.01
 
 def extrude_ring(comp, sketch, height):
     # Find the ring profile (which has 2 loops)
@@ -32,7 +32,7 @@ def extrude_ring(comp, sketch, height):
     ext_in.setDistanceExtent(False, adsk.core.ValueInput.createByReal(height))
     return comp.features.extrudeFeatures.add(ext_in)
 
-def create_common_outer_housing(design, name):
+def create_common_outer_housing(design, name, outer_dia=outer_housing_outer_dia):
     rootComp = design.rootComponent
     
     # Create new component
@@ -44,7 +44,7 @@ def create_common_outer_housing(design, name):
     sk = comp.sketches.add(comp.xYConstructionPlane)
     sk.name = name + " Sketch"
     
-    sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), outer_housing_outer_dia / 2.0)
+    sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), outer_dia / 2.0)
     sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), outer_housing_inner_dia / 2.0)
     
     # Extrude the ring to HEIGHT
@@ -114,7 +114,7 @@ def create_inner_housing(design):
     sk.name = "Inner Housing Sketch"
     sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), inner_housing_outer_dia / 2.0)
     
-    sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), inner_housing_inner_dia / 2.0)
+    sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), max_inner_housing_inner_dia / 2.0)
     
     # Extrude the ring to HEIGHT
     extrude_ring(comp, sk, HEIGHT)
@@ -213,13 +213,16 @@ def create_separator(design):
     return comp
 
 def create_cork(design):
-    comp = create_common_outer_housing(design, "Cork")
+    # Cork thickness is 0.5mm (0.05cm) less than the outer housing wall thickness.
+    # Therefore, the temporary ring for the cork has outer_dia decreased by 2 * 0.05cm = 0.1cm.
+    cork_outer_dia = outer_housing_outer_dia - 0.1
+    comp = create_common_outer_housing(design, "Cork", outer_dia=cork_outer_dia)
     body = comp.bRepBodies.item(0)
     
-    # Create tangent plane (parallel to Z axis, perpendicular to XY plane, tangent to outer housing face)
+    # Create tangent plane (parallel to Z axis, perpendicular to XY plane, tangent to outer cork face)
     planes = comp.constructionPlanes
     planeInput = planes.createInput()
-    planeInput.setByOffset(comp.yZConstructionPlane, adsk.core.ValueInput.createByReal(outer_housing_outer_dia / 2.0))
+    planeInput.setByOffset(comp.yZConstructionPlane, adsk.core.ValueInput.createByReal(cork_outer_dia / 2.0))
     tangent_plane = planes.add(planeInput)
     
     # Create sketch on tangent plane
@@ -227,14 +230,14 @@ def create_cork(design):
     sk_tangent.name = "Tangent Sketch"
     
     # Circle center at height/2 along Z axis, Y axis as 0
-    model_pt_tangent = adsk.core.Point3D.create(outer_housing_outer_dia / 2.0, 0, HEIGHT / 2.0)
+    model_pt_tangent = adsk.core.Point3D.create(cork_outer_dia / 2.0, 0, HEIGHT / 2.0)
     sketch_pt_tangent = sk_tangent.modelToSketchSpace(model_pt_tangent)
     sk_tangent.sketchCurves.sketchCircles.addByCenterRadius(sketch_pt_tangent, cork_cap_diameter / 2.0)
     
     # Extrude intersect the circle into the housing (towards the Z-axis / inwards)
     prof_tangent = sk_tangent.profiles.item(0)
     ext_intersect_in = comp.features.extrudeFeatures.createInput(prof_tangent, adsk.fusion.FeatureOperations.IntersectFeatureOperation)
-    distance_def = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(outer_housing_thickness * 1.5))
+    distance_def = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(cork_outer_dia / 2.0))
     ext_intersect_in.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
     
     # Restrict intersect to only cork body
@@ -247,10 +250,10 @@ def create_cork(design):
     sk_slot = comp.sketches.add(tangent_plane)
     sk_slot.name = "Slot Sketch"
     
-    slot_width = 0.4  # 4mm horizontal length
-    slot_thickness = 0.08  # 0.8mm vertical thickness
+    slot_width = 0.6  # 4mm horizontal length
+    slot_thickness = 0.1  # 0.8mm vertical thickness
     
-    model_center = adsk.core.Point3D.create(outer_housing_outer_dia / 2.0, 0, HEIGHT / 2.0)
+    model_center = adsk.core.Point3D.create(cork_outer_dia / 2.0, 0, HEIGHT / 2.0)
     sketch_center = sk_slot.modelToSketchSpace(model_center)
     
     x_c = sketch_center.x
@@ -281,7 +284,6 @@ def create_cork(design):
     comp.features.extrudeFeatures.add(ext_slot_in)
     
     return comp
-
 def run(context):
     ui = None
     try:
