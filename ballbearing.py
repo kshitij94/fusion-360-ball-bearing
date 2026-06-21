@@ -5,13 +5,13 @@ import os
 HEIGHT = 0.6  # Height of the bearing in cm (6mm)
 ball_diameter = 0.45  # Ball diameter in cm (4.5mm)
 offset_towards_z = 0.1
-outer_housing_outer_dia = 3.0
+outer_housing_outer_dia = 3.0 # default value
 outer_housing_thickness = 0.3
-outer_housing_inner_dia = outer_housing_outer_dia - 2*outer_housing_thickness
+outer_housing_inner_dia = 0.0
 offset_for_revolte_cut = 0.1
 inner_housing_thickness = 0.2
-inner_housing_outer_dia = outer_housing_inner_dia - 0.22*2
-max_inner_housing_inner_dia = inner_housing_outer_dia - 2*inner_housing_thickness
+inner_housing_outer_dia = 0.0
+max_inner_housing_inner_dia = 0.0
 min_gap_between_separater_holes = 0.5
 separater_hole_diameter = ball_diameter - 0.21
 cork_hole_diameter = ball_diameter+0.07
@@ -32,7 +32,9 @@ def extrude_ring(comp, sketch, height):
     ext_in.setDistanceExtent(False, adsk.core.ValueInput.createByReal(height))
     return comp.features.extrudeFeatures.add(ext_in)
 
-def create_common_outer_housing(design, name, outer_dia=outer_housing_outer_dia):
+def create_common_outer_housing(design, name, outer_dia=None):
+    if outer_dia is None:
+        outer_dia = outer_housing_outer_dia
     rootComp = design.rootComponent
     
     # Create new component
@@ -284,6 +286,24 @@ def create_cork(design):
     comp.features.extrudeFeatures.add(ext_slot_in)
     
     return comp
+def get_outer_housing_outer_dia(ui):
+    # Prompt user for outer housing outer diameter
+    val, cancelled = ui.inputBox('Enter outer housing outer diameter (cm):', 'Outer Housing Outer Diameter', str(outer_housing_outer_dia))
+    if cancelled:
+        return None
+
+    try:
+        val_float = float(val)
+    except ValueError:
+        ui.messageBox('Please enter a valid number.', 'Error')
+        return None
+
+    if val_float <= 0:
+        ui.messageBox('Diameter must be a positive number.', 'Error')
+        return None
+
+    return val_float
+
 def run(context):
     ui = None
     try:
@@ -292,6 +312,24 @@ def run(context):
         design = adsk.fusion.Design.cast(app.activeProduct)
         if not design:
             ui.messageBox('No active Fusion design', 'No Design')
+            return
+
+        global outer_housing_outer_dia
+        global outer_housing_inner_dia
+        global inner_housing_outer_dia
+        global max_inner_housing_inner_dia
+
+        outer_dia = get_outer_housing_outer_dia(ui)
+        if outer_dia is None:
+            return
+
+        # Update globals with validated values
+        outer_housing_outer_dia = outer_dia
+        outer_housing_inner_dia = outer_housing_outer_dia - 2 * outer_housing_thickness
+        inner_housing_outer_dia = outer_housing_inner_dia - 0.22 * 2
+        max_inner_housing_inner_dia = inner_housing_outer_dia - 2 * inner_housing_thickness
+        if max_inner_housing_inner_dia <= 0:
+            ui.messageBox('The outer housing outer diameter is too small to fit the inner housing.', 'Error')
             return
 
         create_outer_housing(design)
