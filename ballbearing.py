@@ -11,7 +11,7 @@ outer_housing_inner_dia = 0.0
 offset_for_revolte_cut = 0.1
 inner_housing_thickness = 0.2
 inner_housing_outer_dia = 0.0
-max_inner_housing_inner_dia = 0.0
+inner_housing_inner_dia = 0.0
 min_gap_between_separater_holes = 0.5
 separater_hole_diameter = ball_diameter - 0.21
 cork_hole_diameter = ball_diameter+0.07
@@ -116,7 +116,7 @@ def create_inner_housing(design):
     sk.name = "Inner Housing Sketch"
     sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), inner_housing_outer_dia / 2.0)
     
-    sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), max_inner_housing_inner_dia / 2.0)
+    sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), inner_housing_inner_dia / 2.0)
     
     # Extrude the ring to HEIGHT
     extrude_ring(comp, sk, HEIGHT)
@@ -317,7 +317,7 @@ def run(context):
         global outer_housing_outer_dia
         global outer_housing_inner_dia
         global inner_housing_outer_dia
-        global max_inner_housing_inner_dia
+        global inner_housing_inner_dia
 
         outer_dia = get_outer_housing_outer_dia(ui)
         if outer_dia is None:
@@ -327,8 +327,8 @@ def run(context):
         outer_housing_outer_dia = outer_dia
         outer_housing_inner_dia = outer_housing_outer_dia - 2 * outer_housing_thickness
         inner_housing_outer_dia = outer_housing_inner_dia - 0.22 * 2
-        max_inner_housing_inner_dia = inner_housing_outer_dia - 2 * inner_housing_thickness
-        if max_inner_housing_inner_dia <= 0:
+        inner_housing_inner_dia = round(inner_housing_outer_dia - 2 * inner_housing_thickness, 2)
+        if inner_housing_inner_dia <= 0:
             ui.messageBox('The outer housing outer diameter is too small to fit the inner housing.', 'Error')
             return
 
