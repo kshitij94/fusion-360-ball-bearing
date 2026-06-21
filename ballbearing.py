@@ -101,6 +101,40 @@ def create_outer_housing(design):
     
     comp.features.extrudeFeatures.add(ext_cut_in)
     
+    # Add text on the top face of the outer housing
+    planeInput_top = planes.createInput()
+    planeInput_top.setByOffset(comp.xYConstructionPlane, adsk.core.ValueInput.createByReal(HEIGHT))
+    top_plane = planes.add(planeInput_top)
+    
+    sk_text = comp.sketches.add(top_plane)
+    sk_text.name = "Text Sketch"
+    
+    # Calculate text (convert cm to mm)
+    outer_val = outer_housing_outer_dia * 10
+    inner_val = inner_housing_inner_dia * 10
+    outer_str = f"{outer_val:.2f}".rstrip('0').rstrip('.')
+    inner_str = f"{inner_val:.2f}".rstrip('0').rstrip('.')
+    text_val = f"{outer_str} - {inner_str}"
+    
+    # Text height: 0.15 cm (1.5 mm)
+    text_height = 0.15
+    
+    # Mid radius of outer ring:
+    mid_radius = (outer_housing_outer_dia + outer_housing_inner_dia) / 4.0
+    
+    # Position
+    approx_width = len(text_val) * 0.6 * text_height
+    pos_x = -approx_width / 2.0
+    pos_y = mid_radius - text_height / 2.0
+    
+    point = adsk.core.Point3D.create(pos_x, pos_y, 0)
+    txt_input = sk_text.sketchTexts.createInput(text_val, text_height, point)
+    sketch_text = sk_text.sketchTexts.add(txt_input)
+    
+    # Extrude cut the text into the outer housing by 0.02 cm (0.2 mm)
+    extrudes = comp.features.extrudeFeatures
+    extrudes.addSimple(sketch_text, adsk.core.ValueInput.createByReal(-0.02), adsk.fusion.FeatureOperations.CutFeatureOperation)
+    
     return comp
 
 def create_inner_housing(design):
