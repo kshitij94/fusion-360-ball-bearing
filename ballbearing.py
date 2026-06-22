@@ -19,7 +19,7 @@ separater_hole_diameter = ball_diameter - 0.21
 cork_hole_diameter = ball_diameter+0.07
 cork_cap_diameter = cork_hole_diameter-0.01
 
-def extrude_ring(comp: adsk.fusion.Component, sketch: adsk.fusion.Sketch, height: float) -> Tuple[adsk.fusion.ExtrudeFeature, adsk.fusion.BRepFace]:
+def extrude_ring(comp: adsk.fusion.Component, sketch: adsk.fusion.Sketch, height: float) -> Tuple[adsk.fusion.ExtrudeFeature, Optional[adsk.fusion.BRepFace]]:
     # Find the ring profile (which has 2 loops)
     prof = None
     for p in sketch.profiles:
@@ -47,7 +47,7 @@ def extrude_ring(comp: adsk.fusion.Component, sketch: adsk.fusion.Sketch, height
                 
     return ext_feat, outer_face
 
-def create_common_outer_housing(design: adsk.fusion.Design, name: str, outer_dia: Optional[float] = None) -> Tuple[adsk.fusion.Component, adsk.fusion.BRepFace]:
+def create_common_outer_housing(design: adsk.fusion.Design, name: str, outer_dia: Optional[float] = None) -> Tuple[adsk.fusion.Component, Optional[adsk.fusion.BRepFace]]:
     if outer_dia is None:
         outer_dia = outer_housing_outer_dia
     rootComp = design.rootComponent
