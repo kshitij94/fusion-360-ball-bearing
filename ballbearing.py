@@ -19,7 +19,7 @@ separater_hole_diameter = ball_diameter - 0.21
 cork_hole_diameter = ball_diameter+0.07
 cork_cap_diameter = cork_hole_diameter-0.01
 
-def extrude_ring(comp: adsk.fusion.Component, sketch: adsk.fusion.Sketch, height: float) -> Tuple[adsk.fusion.ExtrudeFeature, Optional[adsk.fusion.BRepFace]]:
+def extrude_ring(comp: adsk.fusion.Component, sketch: adsk.fusion.Sketch, height: float) -> Tuple[adsk.fusion.ExtrudeFeature, adsk.fusion.BRepFace]:
     # Find the ring profile (which has 2 loops)
     prof = None
     for p in sketch.profiles:
@@ -44,10 +44,11 @@ def extrude_ring(comp: adsk.fusion.Component, sketch: adsk.fusion.Sketch, height
             if cylinder and cylinder.radius > max_radius:
                 max_radius = cylinder.radius
                 outer_face = face
-                
+    if not outer_face:
+        raise Exception("No outer cylindrical face found")      
     return ext_feat, outer_face
 
-def create_common_outer_housing(design: adsk.fusion.Design, name: str, outer_dia: Optional[float] = None) -> Tuple[adsk.fusion.Component, Optional[adsk.fusion.BRepFace]]:
+def create_common_outer_housing(design: adsk.fusion.Design, name: str, outer_dia: Optional[float] = None) -> Tuple[adsk.fusion.Component, adsk.fusion.BRepFace]:
     if outer_dia is None:
         outer_dia = outer_housing_outer_dia
     rootComp = design.rootComponent
@@ -146,9 +147,11 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     # Create sketch and text on outer tangent plane
     sk_outer = comp.sketches.add(outer_diameter_tangent_plane)
     sk_outer.name = "Outer Diameter Text Sketch"
+    model_point_outer = adsk.core.Point3D.create(0.0, cylinder_radius, HEIGHT / 2.0)
+    sketch_point_outer = sk_outer.modelToSketchSpace(model_point_outer)
     approx_width_outer = len(outer_str) * 0.6 * dimention_text_height
-    pos_x_outer = -approx_width_outer / 2.0
-    pos_y_outer = HEIGHT / 2.0 - dimention_text_height / 2.0
+    pos_x_outer = sketch_point_outer.x - approx_width_outer / 2.0
+    pos_y_outer = sketch_point_outer.y - dimention_text_height / 2.0
     point_outer = adsk.core.Point3D.create(pos_x_outer, pos_y_outer, 0)
     txt_input_outer = sk_outer.sketchTexts.createInput(outer_str, dimention_text_height, point_outer)
     sketch_text_outer = sk_outer.sketchTexts.add(txt_input_outer)
@@ -156,9 +159,11 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     # Create sketch and text on inner tangent plane
     sk_inner = comp.sketches.add(inner_diameter_tangent_plane)
     sk_inner.name = "Inner Diameter Text Sketch"
+    model_point_inner = adsk.core.Point3D.create(0.0, -cylinder_radius, HEIGHT / 2.0)
+    sketch_point_inner = sk_inner.modelToSketchSpace(model_point_inner)
     approx_width_inner = len(inner_str) * 0.6 * dimention_text_height
-    pos_x_inner = -approx_width_inner / 2.0
-    pos_y_inner = HEIGHT / 2.0 - dimention_text_height / 2.0
+    pos_x_inner = sketch_point_inner.x - approx_width_inner / 2.0
+    pos_y_inner = sketch_point_inner.y - dimention_text_height / 2.0
     point_inner = adsk.core.Point3D.create(pos_x_inner, pos_y_inner, 0)
     txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, dimention_text_height, point_inner)
     sketch_text_inner = sk_inner.sketchTexts.add(txt_input_inner)
