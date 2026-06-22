@@ -168,24 +168,21 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, dimention_text_height, point_inner)
     sketch_text_inner = sk_inner.sketchTexts.add(txt_input_inner)
     
-    # Extrude cut the text profiles starting from the cylindrical face
+    # Extrude cut the text profiles starting from their sketch planes (which are tangent)
     extrudes = comp.features.extrudeFeatures
     body = comp.bRepBodies.item(0)
     
     # 1.5 mm depth (0.15 cm)
     distance_def = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(0.15))
-    start_def = adsk.fusion.FromEntityStartDefinition.create(face, adsk.core.ValueInput.createByReal(0.0))
     
     # Extrude outer text (Negative direction goes inwards)
     extInput_outer = extrudes.createInput(sketch_text_outer, adsk.fusion.FeatureOperations.CutFeatureOperation)
-    extInput_outer.startExtent = start_def
     extInput_outer.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
     extInput_outer.participantBodies = [body]
     extrudes.add(extInput_outer)
         
     # Extrude inner text (Positive direction goes inwards since plane is at Y = -R)
     extInput_inner = extrudes.createInput(sketch_text_inner, adsk.fusion.FeatureOperations.CutFeatureOperation)
-    extInput_inner.startExtent = start_def
     extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.PositiveExtentDirection)
     extInput_inner.participantBodies = [body]
     extrudes.add(extInput_inner)
