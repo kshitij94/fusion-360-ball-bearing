@@ -143,7 +143,7 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     inner_val = round(inner_housing_inner_dia * 10, 2)
     outer_str = f"{outer_val:g}"
     inner_str = f"{inner_val:g}"
-    
+
     # Create sketch and text on outer tangent plane
     sk_outer = comp.sketches.add(outer_diameter_tangent_plane)
     sk_outer.name = "Outer Diameter Text Sketch"
@@ -162,10 +162,12 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     model_point_inner = adsk.core.Point3D.create(0.0, -cylinder_radius, HEIGHT / 2.0)
     sketch_point_inner = sk_inner.modelToSketchSpace(model_point_inner)
     approx_width_inner = len(inner_str) * 0.6 * dimention_text_height
-    pos_x_inner = sketch_point_inner.x - approx_width_inner / 2.0
+    pos_x_inner = sketch_point_inner.x + approx_width_inner / 2.0
     pos_y_inner = sketch_point_inner.y - dimention_text_height / 2.0
     point_inner = adsk.core.Point3D.create(pos_x_inner, pos_y_inner, 0)
     txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, dimention_text_height, point_inner)
+    txt_input_inner.isHorizontalFlip = True
+
     sketch_text_inner = sk_inner.sketchTexts.add(txt_input_inner)
     
     # Extrude cut the text profiles starting from their sketch planes (which are tangent)
