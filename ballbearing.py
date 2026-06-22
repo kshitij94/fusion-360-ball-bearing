@@ -108,12 +108,6 @@ def create_outer_housing(design):
 
 def engrave_dimensions_on_outer_housing(comp):
     planes = comp.constructionPlanes
-    planeInput_top = planes.createInput()
-    planeInput_top.setByOffset(comp.xYConstructionPlane, adsk.core.ValueInput.createByReal(HEIGHT))
-    top_plane = planes.add(planeInput_top)
-    
-    sk_text = comp.sketches.add(top_plane)
-    sk_text.name = "Text Sketch"
     
     # Calculate text (convert cm to mm)
     outer_val = outer_housing_outer_dia * 10
@@ -123,29 +117,39 @@ def engrave_dimensions_on_outer_housing(comp):
     
     text_height = outer_housing_thickness - 0.1
     
-    # Mid radius of outer ring:
-    mid_radius = (outer_housing_outer_dia + outer_housing_inner_dia) / 4.0
+    # 1. Outer diameter text (tangent plane at y = outer_housing_outer_dia / 2.0)
+    planeInput_outer = planes.createInput()
+    planeInput_outer.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(outer_housing_outer_dia / 2.0))
+    plane_outer = planes.add(planeInput_outer)
     
-    # 1. Outer diameter text (at the top: 0, mid_radius)
+    sk_outer = comp.sketches.add(plane_outer)
+    sk_outer.name = "Outer Text Sketch"
+    
     approx_width_outer = len(outer_str) * 0.6 * text_height
     pos_x_outer = -approx_width_outer / 2.0
-    pos_y_outer = mid_radius - text_height / 2.0
+    pos_y_outer = HEIGHT / 2.0 - text_height / 2.0
     point_outer = adsk.core.Point3D.create(pos_x_outer, pos_y_outer, 0)
     
-    txt_input_outer = sk_text.sketchTexts.createInput(outer_str, text_height, point_outer)
-    sketch_text_outer = sk_text.sketchTexts.add(txt_input_outer)
+    txt_input_outer = sk_outer.sketchTexts.createInput(outer_str, text_height, point_outer)
+    sketch_text_outer = sk_outer.sketchTexts.add(txt_input_outer)
     
-    # 2. Inner diameter text (at the bottom: 0, -mid_radius, rotated 180 degrees)
+    # 2. Inner diameter text (tangent plane at y = -outer_housing_outer_dia / 2.0)
+    planeInput_inner = planes.createInput()
+    planeInput_inner.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(-outer_housing_outer_dia / 2.0))
+    plane_inner = planes.add(planeInput_inner)
+    
+    sk_inner = comp.sketches.add(plane_inner)
+    sk_inner.name = "Inner Text Sketch"
+    
     approx_width_inner = len(inner_str) * 0.6 * text_height
-    pos_x_inner = approx_width_inner / 2.0
-    pos_y_inner = -mid_radius + text_height / 2.0
+    pos_x_inner = -approx_width_inner / 2.0
+    pos_y_inner = HEIGHT / 2.0 - text_height / 2.0
     point_inner = adsk.core.Point3D.create(pos_x_inner, pos_y_inner, 0)
     
-    txt_input_inner = sk_text.sketchTexts.createInput(inner_str, text_height, point_inner)
-    txt_input_inner.angle = math.pi
-    sketch_text_inner = sk_text.sketchTexts.add(txt_input_inner)
+    txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, text_height, point_inner)
+    sketch_text_inner = sk_inner.sketchTexts.add(txt_input_inner)
     
-    # Extrude cut the text into the outer housing by 0.02 cm (0.2 mm)
+    # Extrude cut the text into the cylinder face by 0.02 cm (0.2 mm)
     extrudes = comp.features.extrudeFeatures
     extrudes.addSimple(sketch_text_outer, adsk.core.ValueInput.createByReal(-0.02), adsk.fusion.FeatureOperations.CutFeatureOperation)
     extrudes.addSimple(sketch_text_inner, adsk.core.ValueInput.createByReal(-0.02), adsk.fusion.FeatureOperations.CutFeatureOperation)
