@@ -134,8 +134,12 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     outer_diameter_tangent_plane = planes.add(planeInput_outer)
     
     # 2. Inner diameter tangent plane (at Y = -1 * cylinder_radius, Z = HEIGHT/2)
+    # Define a mathematical plane at Y = -cylinder_radius with normal pointing in -Y direction
     planeInput_inner = planes.createInput()
-    planeInput_inner.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(-cylinder_radius))
+    origin_inner = adsk.core.Point3D.create(0.0, -cylinder_radius, 0.0)
+    normal_inner = adsk.core.Vector3D.create(0.0, -1.0, 0.0)
+    planeGeom_inner = adsk.core.Plane.create(origin_inner, normal_inner)
+    planeInput_inner.setByPlane(planeGeom_inner)
     inner_diameter_tangent_plane = planes.add(planeInput_inner)
     
     # Calculate text in mm and round to 2 decimals
@@ -166,7 +170,6 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     pos_y_inner = sketch_point_inner.y - dimention_text_height / 2.0
     point_inner = adsk.core.Point3D.create(pos_x_inner, pos_y_inner, 0)
     txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, dimention_text_height, point_inner)
-    txt_input_inner.isVerticalFlip = True
     sketch_text_inner = sk_inner.sketchTexts.add(txt_input_inner)
     
     # Extrude cut the text profiles starting from their sketch planes (which are tangent)
@@ -182,9 +185,9 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     extInput_outer.participantBodies = [body]
     extrudes.add(extInput_outer)
         
-    # Extrude inner text (Positive direction goes inwards since plane is at Y = -R)
+    # Extrude inner text (Negative direction goes inwards since plane faces outwards)
     extInput_inner = extrudes.createInput(sketch_text_inner, adsk.fusion.FeatureOperations.CutFeatureOperation)
-    extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.PositiveExtentDirection)
+    extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
     extInput_inner.participantBodies = [body]
     extrudes.add(extInput_inner)
 
