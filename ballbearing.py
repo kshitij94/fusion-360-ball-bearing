@@ -166,6 +166,7 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     pos_y_inner = sketch_point_inner.y - dimention_text_height / 2.0
     point_inner = adsk.core.Point3D.create(pos_x_inner, pos_y_inner, 0)
     txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, dimention_text_height, point_inner)
+    txt_input_inner.isVerticalFlip = True
     sketch_text_inner = sk_inner.sketchTexts.add(txt_input_inner)
     
     # Extrude cut the text profiles starting from their sketch planes (which are tangent)
