@@ -102,11 +102,11 @@ def create_outer_housing(design):
     comp.features.extrudeFeatures.add(ext_cut_in)
     
     # Engrave diameters text on top face
-    engrave_text_on_outer_housing(comp)
+    engrave_dimensions_on_outer_housing(comp)
     
     return comp
 
-def engrave_text_on_outer_housing(comp):
+def engrave_dimensions_on_outer_housing(comp):
     planes = comp.constructionPlanes
     planeInput_top = planes.createInput()
     planeInput_top.setByOffset(comp.xYConstructionPlane, adsk.core.ValueInput.createByReal(HEIGHT))
