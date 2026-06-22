@@ -177,26 +177,18 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     start_def = adsk.fusion.FromEntityStartDefinition.create(face, adsk.core.ValueInput.createByReal(0.0))
     
     # Extrude outer text (Negative direction goes inwards)
-    prof_outer = adsk.core.ObjectCollection.create()
-    for p in sk_outer.profiles:
-        prof_outer.add(p)
-    if prof_outer.count > 0:
-        extInput_outer = extrudes.createInput(prof_outer, adsk.fusion.FeatureOperations.CutFeatureOperation)
-        extInput_outer.startExtent = start_def
-        extInput_outer.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
-        extInput_outer.participantBodies = [body]
-        extrudes.add(extInput_outer)
+    extInput_outer = extrudes.createInput(sketch_text_outer, adsk.fusion.FeatureOperations.CutFeatureOperation)
+    extInput_outer.startExtent = start_def
+    extInput_outer.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
+    extInput_outer.participantBodies = [body]
+    extrudes.add(extInput_outer)
         
     # Extrude inner text (Positive direction goes inwards since plane is at Y = -R)
-    prof_inner = adsk.core.ObjectCollection.create()
-    for p in sk_inner.profiles:
-        prof_inner.add(p)
-    if prof_inner.count > 0:
-        extInput_inner = extrudes.createInput(prof_inner, adsk.fusion.FeatureOperations.CutFeatureOperation)
-        extInput_inner.startExtent = start_def
-        extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.PositiveExtentDirection)
-        extInput_inner.participantBodies = [body]
-        extrudes.add(extInput_inner)
+    extInput_inner = extrudes.createInput(sketch_text_inner, adsk.fusion.FeatureOperations.CutFeatureOperation)
+    extInput_inner.startExtent = start_def
+    extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.PositiveExtentDirection)
+    extInput_inner.participantBodies = [body]
+    extrudes.add(extInput_inner)
 
 def create_inner_housing(design: adsk.fusion.Design) -> adsk.fusion.Component:
     rootComp = design.rootComponent
