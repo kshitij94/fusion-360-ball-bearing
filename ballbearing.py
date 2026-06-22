@@ -121,8 +121,7 @@ def engrave_dimensions_on_outer_housing(comp):
     outer_str = f"{outer_val:.2f}".rstrip('0').rstrip('.')
     inner_str = f"{inner_val:.2f}".rstrip('0').rstrip('.')
     
-    # Text height: 0.15 cm (1.5 mm)
-    text_height = 0.15
+    text_height = outer_housing_thickness - 0.1
     
     # Mid radius of outer ring:
     mid_radius = (outer_housing_outer_dia + outer_housing_inner_dia) / 4.0
