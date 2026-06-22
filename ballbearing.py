@@ -134,12 +134,8 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     outer_diameter_tangent_plane = planes.add(planeInput_outer)
     
     # 2. Inner diameter tangent plane (at Y = -1 * cylinder_radius, Z = HEIGHT/2)
-    # Define a mathematical plane at Y = -cylinder_radius with normal pointing in -Y direction
     planeInput_inner = planes.createInput()
-    origin_inner = adsk.core.Point3D.create(0.0, -cylinder_radius, 0.0)
-    normal_inner = adsk.core.Vector3D.create(0.0, -1.0, 0.0)
-    planeGeom_inner = adsk.core.Plane.create(origin_inner, normal_inner)
-    planeInput_inner.setByPlane(planeGeom_inner)
+    planeInput_inner.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(-cylinder_radius))
     inner_diameter_tangent_plane = planes.add(planeInput_inner)
     
     # Calculate text in mm and round to 2 decimals
@@ -185,9 +181,9 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     extInput_outer.participantBodies = [body]
     extrudes.add(extInput_outer)
         
-    # Extrude inner text (Negative direction goes inwards since plane faces outwards)
+    # Extrude inner text (Positive direction goes inwards since plane is at Y = -R)
     extInput_inner = extrudes.createInput(sketch_text_inner, adsk.fusion.FeatureOperations.CutFeatureOperation)
-    extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
+    extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.PositiveExtentDirection)
     extInput_inner.participantBodies = [body]
     extrudes.add(extInput_inner)
 
