@@ -131,7 +131,7 @@ def engrave_dimensions_on_outer_housing(comp):
     point_outer = adsk.core.Point3D.create(pos_x_outer, pos_y_outer, 0)
     
     txt_input_outer = sk_outer.sketchTexts.createInput(outer_str, text_height, point_outer)
-    sketch_text_outer = sk_outer.sketchTexts.add(txt_input_outer)
+    sk_outer.sketchTexts.add(txt_input_outer)
     
     # 2. Inner diameter text (tangent plane at y = -outer_housing_outer_dia / 2.0)
     planeInput_inner = planes.createInput()
@@ -147,12 +147,32 @@ def engrave_dimensions_on_outer_housing(comp):
     point_inner = adsk.core.Point3D.create(pos_x_inner, pos_y_inner, 0)
     
     txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, text_height, point_inner)
-    sketch_text_inner = sk_inner.sketchTexts.add(txt_input_inner)
+    sk_inner.sketchTexts.add(txt_input_inner)
     
-    # Extrude cut the text into the cylinder face by 0.02 cm (0.2 mm)
+    # Extrude cut the text profiles into the cylinder face
     extrudes = comp.features.extrudeFeatures
-    extrudes.addSimple(sketch_text_outer, adsk.core.ValueInput.createByReal(-0.02), adsk.fusion.FeatureOperations.CutFeatureOperation)
-    extrudes.addSimple(sketch_text_inner, adsk.core.ValueInput.createByReal(-0.02), adsk.fusion.FeatureOperations.CutFeatureOperation)
+    body = comp.bRepBodies.item(0)
+    distance_def = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(0.02))
+    
+    # Extrude outer text (Negative direction goes inwards)
+    prof_outer = adsk.core.ObjectCollection.create()
+    for p in sk_outer.profiles:
+        prof_outer.add(p)
+    if prof_outer.count > 0:
+        extInput_outer = extrudes.createInput(prof_outer, adsk.fusion.FeatureOperations.CutFeatureOperation)
+        extInput_outer.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
+        extInput_outer.participantBodies = [body]
+        extrudes.add(extInput_outer)
+        
+    # Extrude inner text (Positive direction goes inwards since plane is at Y = -R)
+    prof_inner = adsk.core.ObjectCollection.create()
+    for p in sk_inner.profiles:
+        prof_inner.add(p)
+    if prof_inner.count > 0:
+        extInput_inner = extrudes.createInput(prof_inner, adsk.fusion.FeatureOperations.CutFeatureOperation)
+        extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.PositiveExtentDirection)
+        extInput_inner.participantBodies = [body]
+        extrudes.add(extInput_inner)
 
 
 def create_inner_housing(design):
