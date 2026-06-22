@@ -1,8 +1,10 @@
 import adsk.core, adsk.fusion, traceback
 import math
 import os
+from typing import Tuple, Optional
 
 HEIGHT = 0.6  # Height of the bearing in cm (6mm)
+dimention_text_height = HEIGHT - 0.2
 ball_diameter = 0.45  # Ball diameter in cm (4.5mm)
 offset_towards_z = 0.1
 outer_housing_outer_dia = 3.0 # default value
@@ -17,7 +19,7 @@ separater_hole_diameter = ball_diameter - 0.21
 cork_hole_diameter = ball_diameter+0.07
 cork_cap_diameter = cork_hole_diameter-0.01
 
-def extrude_ring(comp, sketch, height):
+def extrude_ring(comp: adsk.fusion.Component, sketch: adsk.fusion.Sketch, height: float) -> Tuple[adsk.fusion.ExtrudeFeature, adsk.fusion.BRepFace]:
     # Find the ring profile (which has 2 loops)
     prof = None
     for p in sketch.profiles:
@@ -30,9 +32,22 @@ def extrude_ring(comp, sketch, height):
     # Extrude the ring profile
     ext_in = comp.features.extrudeFeatures.createInput(prof, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
     ext_in.setDistanceExtent(False, adsk.core.ValueInput.createByReal(height))
-    return comp.features.extrudeFeatures.add(ext_in)
+    ext_feat = comp.features.extrudeFeatures.add(ext_in)
+    
+    # Find outer cylindrical face
+    outer_face = None
+    max_radius = 0.0
+    for face in ext_feat.sideFaces:
+        geom = face.geometry
+        if geom.classType() == adsk.core.Cylinder.classType():
+            cylinder = adsk.core.Cylinder.cast(geom)
+            if cylinder and cylinder.radius > max_radius:
+                max_radius = cylinder.radius
+                outer_face = face
+                
+    return ext_feat, outer_face
 
-def create_common_outer_housing(design, name, outer_dia=None):
+def create_common_outer_housing(design: adsk.fusion.Design, name: str, outer_dia: Optional[float] = None) -> Tuple[adsk.fusion.Component, adsk.fusion.BRepFace]:
     if outer_dia is None:
         outer_dia = outer_housing_outer_dia
     rootComp = design.rootComponent
@@ -50,7 +65,7 @@ def create_common_outer_housing(design, name, outer_dia=None):
     sk.sketchCurves.sketchCircles.addByCenterRadius(adsk.core.Point3D.create(0,0,0), outer_housing_inner_dia / 2.0)
     
     # Extrude the ring to HEIGHT
-    extrude_ring(comp, sk, HEIGHT)
+    _, outer_face = extrude_ring(comp, sk, HEIGHT)
     
     # Sketch on XZ plane for the revolute cut
     sk_cut = comp.sketches.add(comp.xZConstructionPlane)
@@ -69,10 +84,10 @@ def create_common_outer_housing(design, name, outer_dia=None):
     
     comp.features.revolveFeatures.add(rev_in)
     
-    return comp
+    return comp, outer_face
 
-def create_outer_housing(design):
-    comp = create_common_outer_housing(design, "Housing")
+def create_outer_housing(design: adsk.fusion.Design) -> adsk.fusion.Component:
+    comp, outer_housing_outer_face = create_common_outer_housing(design, "Housing")
     body = comp.bRepBodies.item(0)
 
     # Create a tangent plane to cut the cork hole.
@@ -85,7 +100,7 @@ def create_outer_housing(design):
     sk_tangent = comp.sketches.add(tangent_plane)
     sk_tangent.name = "Tangent Sketch"
     
-   
+    
     model_pt_tangent = adsk.core.Point3D.create(outer_housing_outer_dia / 2.0, 0, HEIGHT / 2.0)
     sketch_pt_tangent = sk_tangent.modelToSketchSpace(model_pt_tangent)
     sk_tangent.sketchCurves.sketchCircles.addByCenterRadius(sketch_pt_tangent, cork_hole_diameter / 2.0)
@@ -101,58 +116,60 @@ def create_outer_housing(design):
     
     comp.features.extrudeFeatures.add(ext_cut_in)
     
-    # Engrave diameters text on top face
-    engrave_dimensions_on_outer_housing(comp)
-    
+    engrave_dimentions(comp, outer_housing_outer_face)
+        
     return comp
 
-def engrave_dimensions_on_outer_housing(comp):
+def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) -> None:
     planes = comp.constructionPlanes
     
-    # Calculate text (convert cm to mm)
-    outer_val = outer_housing_outer_dia * 10
-    inner_val = inner_housing_inner_dia * 10
-    outer_str = f"{outer_val:.2f}".rstrip('0').rstrip('.')
-    inner_str = f"{inner_val:.2f}".rstrip('0').rstrip('.')
+    # Cast face to Cylinder to get its radius
+    cylinder = adsk.core.Cylinder.cast(face.geometry)
+    cylinder_radius = cylinder.radius
     
-    text_height = outer_housing_thickness - 0.1
-    
-    # 1. Outer diameter text (tangent plane at y = outer_housing_outer_dia / 2.0)
+    # 1. Outer diameter tangent plane (at Y = cylinder_radius, Z = HEIGHT/2)
     planeInput_outer = planes.createInput()
-    planeInput_outer.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(outer_housing_outer_dia / 2.0))
-    plane_outer = planes.add(planeInput_outer)
+    planeInput_outer.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(cylinder_radius))
+    outer_diameter_tangent_plane = planes.add(planeInput_outer)
     
-    sk_outer = comp.sketches.add(plane_outer)
-    sk_outer.name = "Outer Text Sketch"
-    
-    approx_width_outer = len(outer_str) * 0.6 * text_height
-    pos_x_outer = -approx_width_outer / 2.0
-    pos_y_outer = HEIGHT / 2.0 - text_height / 2.0
-    point_outer = adsk.core.Point3D.create(pos_x_outer, pos_y_outer, 0)
-    
-    txt_input_outer = sk_outer.sketchTexts.createInput(outer_str, text_height, point_outer)
-    sk_outer.sketchTexts.add(txt_input_outer)
-    
-    # 2. Inner diameter text (tangent plane at y = -outer_housing_outer_dia / 2.0)
+    # 2. Inner diameter tangent plane (at Y = -1 * cylinder_radius, Z = HEIGHT/2)
     planeInput_inner = planes.createInput()
-    planeInput_inner.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(-outer_housing_outer_dia / 2.0))
-    plane_inner = planes.add(planeInput_inner)
+    planeInput_inner.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(-cylinder_radius))
+    inner_diameter_tangent_plane = planes.add(planeInput_inner)
     
-    sk_inner = comp.sketches.add(plane_inner)
-    sk_inner.name = "Inner Text Sketch"
+    # Calculate text in mm and round to 2 decimals
+    outer_val = round(outer_housing_outer_dia * 10, 2)
+    inner_val = round(inner_housing_inner_dia * 10, 2)
+    outer_str = f"{outer_val:g}"
+    inner_str = f"{inner_val:g}"
     
-    approx_width_inner = len(inner_str) * 0.6 * text_height
+    # Create sketch and text on outer tangent plane
+    sk_outer = comp.sketches.add(outer_diameter_tangent_plane)
+    sk_outer.name = "Outer Diameter Text Sketch"
+    approx_width_outer = len(outer_str) * 0.6 * dimention_text_height
+    pos_x_outer = -approx_width_outer / 2.0
+    pos_y_outer = HEIGHT / 2.0 - dimention_text_height / 2.0
+    point_outer = adsk.core.Point3D.create(pos_x_outer, pos_y_outer, 0)
+    txt_input_outer = sk_outer.sketchTexts.createInput(outer_str, dimention_text_height, point_outer)
+    sketch_text_outer = sk_outer.sketchTexts.add(txt_input_outer)
+    
+    # Create sketch and text on inner tangent plane
+    sk_inner = comp.sketches.add(inner_diameter_tangent_plane)
+    sk_inner.name = "Inner Diameter Text Sketch"
+    approx_width_inner = len(inner_str) * 0.6 * dimention_text_height
     pos_x_inner = -approx_width_inner / 2.0
-    pos_y_inner = HEIGHT / 2.0 - text_height / 2.0
+    pos_y_inner = HEIGHT / 2.0 - dimention_text_height / 2.0
     point_inner = adsk.core.Point3D.create(pos_x_inner, pos_y_inner, 0)
+    txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, dimention_text_height, point_inner)
+    sketch_text_inner = sk_inner.sketchTexts.add(txt_input_inner)
     
-    txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, text_height, point_inner)
-    sk_inner.sketchTexts.add(txt_input_inner)
-    
-    # Extrude cut the text profiles into the cylinder face
+    # Extrude cut the text profiles starting from the cylindrical face
     extrudes = comp.features.extrudeFeatures
     body = comp.bRepBodies.item(0)
-    distance_def = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(0.02))
+    
+    # 1.5 mm depth (0.15 cm)
+    distance_def = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(0.15))
+    start_def = adsk.fusion.FromEntityStartDefinition.create(face, adsk.core.ValueInput.createByReal(0.0))
     
     # Extrude outer text (Negative direction goes inwards)
     prof_outer = adsk.core.ObjectCollection.create()
@@ -160,6 +177,7 @@ def engrave_dimensions_on_outer_housing(comp):
         prof_outer.add(p)
     if prof_outer.count > 0:
         extInput_outer = extrudes.createInput(prof_outer, adsk.fusion.FeatureOperations.CutFeatureOperation)
+        extInput_outer.startExtent = start_def
         extInput_outer.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
         extInput_outer.participantBodies = [body]
         extrudes.add(extInput_outer)
@@ -170,12 +188,12 @@ def engrave_dimensions_on_outer_housing(comp):
         prof_inner.add(p)
     if prof_inner.count > 0:
         extInput_inner = extrudes.createInput(prof_inner, adsk.fusion.FeatureOperations.CutFeatureOperation)
+        extInput_inner.startExtent = start_def
         extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.PositiveExtentDirection)
         extInput_inner.participantBodies = [body]
         extrudes.add(extInput_inner)
 
-
-def create_inner_housing(design):
+def create_inner_housing(design: adsk.fusion.Design) -> adsk.fusion.Component:
     rootComp = design.rootComponent
     
     # Create new component
@@ -213,7 +231,7 @@ def create_inner_housing(design):
     
     return comp
 
-def compute_number_of_holes_in_separater(mid_dia):
+def compute_number_of_holes_in_separater(mid_dia: float) -> int:
     # Constraint: Maximize the number of separator holes such that the centers
     # are spaced so that the gap between any two adjacent holes of size
     # 'ball_diameter' is at least 3mm (0.3cm).
@@ -221,7 +239,7 @@ def compute_number_of_holes_in_separater(mid_dia):
     num_holes = int(circumference / (separater_hole_diameter + min_gap_between_separater_holes))
     return num_holes
 
-def create_separator(design):
+def create_separator(design: adsk.fusion.Design) -> adsk.fusion.Component:
     rootComp = design.rootComponent
     
     # Create new component
@@ -286,11 +304,11 @@ def create_separator(design):
     
     return comp
 
-def create_cork(design):
+def create_cork(design: adsk.fusion.Design) -> adsk.fusion.Component:
     # Cork thickness is 0.5mm (0.05cm) less than the outer housing wall thickness.
     # Therefore, the temporary ring for the cork has outer_dia decreased by 2 * 0.05cm = 0.1cm.
     cork_outer_dia = outer_housing_outer_dia - 0.1
-    comp = create_common_outer_housing(design, "Cork", outer_dia=cork_outer_dia)
+    comp, _ = create_common_outer_housing(design, "Cork", outer_dia=cork_outer_dia)
     body = comp.bRepBodies.item(0)
     
     # Create tangent plane (parallel to Z axis, perpendicular to XY plane, tangent to outer cork face)
@@ -358,7 +376,7 @@ def create_cork(design):
     comp.features.extrudeFeatures.add(ext_slot_in)
     
     return comp
-def get_outer_housing_outer_dia(ui):
+def get_outer_housing_outer_dia(ui: adsk.core.UserInterface) -> Optional[float]:
     # Prompt user for outer housing outer diameter
     val, cancelled = ui.inputBox('Enter outer housing outer diameter (cm):', 'Outer Housing Outer Diameter', str(outer_housing_outer_dia))
     if cancelled:
@@ -376,7 +394,7 @@ def get_outer_housing_outer_dia(ui):
 
     return val_float
 
-def run(context):
+def run(context: dict) -> None:
     ui = None
     try:
         app = adsk.core.Application.get()
