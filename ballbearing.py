@@ -128,15 +128,15 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     cylinder = adsk.core.Cylinder.cast(face.geometry)
     cylinder_radius = cylinder.radius
     
-    # 1. Outer diameter tangent plane (at Y = cylinder_radius, Z = HEIGHT/2)
+    # Outer diameter tangent plane (at Y = cylinder_radius, Z = HEIGHT/2)
     planeInput_outer = planes.createInput()
     planeInput_outer.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(cylinder_radius))
     outer_diameter_tangent_plane = planes.add(planeInput_outer)
     
-    # 2. Inner diameter tangent plane (at Y = -1 * cylinder_radius, Z = HEIGHT/2)
-    planeInput_inner = planes.createInput()
-    planeInput_inner.setByOffset(comp.xZConstructionPlane, adsk.core.ValueInput.createByReal(-cylinder_radius))
-    inner_diameter_tangent_plane = planes.add(planeInput_inner)
+    # Tangent plane at 55 degrees
+    planeInput_55 = planes.createInput()
+    planeInput_55.setByTangent(face, adsk.core.ValueInput.createByReal(math.radians(55)), comp.xZConstructionPlane)
+    tangent_plane_55 = planes.add(planeInput_55)
     
     # Calculate text in mm and round to 2 decimals
     outer_val = round(outer_housing_outer_dia * 10, 2)
@@ -144,31 +144,38 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     outer_str = f"{outer_val:g}"
     inner_str = f"{inner_val:g}"
 
-    # Create sketch and text on outer tangent plane
-    sk_outer = comp.sketches.add(outer_diameter_tangent_plane)
-    sk_outer.name = "Outer Diameter Text Sketch"
-    model_point_outer = adsk.core.Point3D.create(0.0, cylinder_radius, HEIGHT / 2.0)
-    sketch_point_outer = sk_outer.modelToSketchSpace(model_point_outer)
-    approx_width_outer = len(outer_str) * 0.6 * dimention_text_height
-    pos_x_outer = sketch_point_outer.x - approx_width_outer / 2.0
-    pos_y_outer = sketch_point_outer.y - dimention_text_height / 2.0
-    point_outer = adsk.core.Point3D.create(pos_x_outer, pos_y_outer, 0)
-    txt_input_outer = sk_outer.sketchTexts.createInput(outer_str, dimention_text_height, point_outer)
-    sketch_text_outer = sk_outer.sketchTexts.add(txt_input_outer)
-    
-    # Create sketch and text on inner tangent plane
-    sk_inner = comp.sketches.add(inner_diameter_tangent_plane)
+    # Create sketch and text for inner diameter on the outer tangent plane (0 degrees)
+    sk_inner = comp.sketches.add(outer_diameter_tangent_plane)
     sk_inner.name = "Inner Diameter Text Sketch"
-    model_point_inner = adsk.core.Point3D.create(0.0, -cylinder_radius, HEIGHT / 2.0)
+    model_point_inner = adsk.core.Point3D.create(0.0, cylinder_radius, HEIGHT / 2.0)
     sketch_point_inner = sk_inner.modelToSketchSpace(model_point_inner)
     approx_width_inner = len(inner_str) * 0.6 * dimention_text_height
-    pos_x_inner = sketch_point_inner.x + approx_width_inner / 2.0
+    pos_x_inner = sketch_point_inner.x - approx_width_inner / 2.0
     pos_y_inner = sketch_point_inner.y - dimention_text_height / 2.0
     point_inner = adsk.core.Point3D.create(pos_x_inner, pos_y_inner, 0)
     txt_input_inner = sk_inner.sketchTexts.createInput(inner_str, dimention_text_height, point_inner)
-    txt_input_inner.isHorizontalFlip = True
-
     sketch_text_inner = sk_inner.sketchTexts.add(txt_input_inner)
+
+    # Create sketch and text for outer diameter on the 55-degree tangent plane
+    sk_outer = comp.sketches.add(tangent_plane_55)
+    sk_outer.name = "Outer Diameter Text Sketch"
+    angle_rad = math.radians(55)
+    model_point_outer = adsk.core.Point3D.create(-cylinder_radius * math.sin(angle_rad), cylinder_radius * math.cos(angle_rad), HEIGHT / 2.0)
+    sketch_point_outer = sk_outer.modelToSketchSpace(model_point_outer)
+    approx_width_outer = len(outer_str) * 0.6 * dimention_text_height
+    
+    # Create start and end points for the horizontal line (along local X-axis)
+    p_start = adsk.core.Point3D.create(sketch_point_outer.x - approx_width_outer / 2.0, sketch_point_outer.y-dimention_text_height/2, 0)
+    p_end = adsk.core.Point3D.create(sketch_point_outer.x + approx_width_outer / 2.0, sketch_point_outer.y-dimention_text_height/2, 0)
+    
+    # Draw construction line
+    sketch_line = sk_outer.sketchCurves.sketchLines.addByTwoPoints(p_start, p_end)
+    sketch_line.isConstruction = True
+    
+    texts = sk_outer.sketchTexts
+    txt_input_outer = texts.createInput3(f"'{outer_str}'", adsk.core.ValueInput.createByReal(dimention_text_height))
+    txt_input_outer.setAsAlongPath(sketch_line, True, adsk.core.HorizontalAlignments.CenterHorizontalAlignment, 10.0)
+    sketch_text_outer = texts.add(txt_input_outer)
     
     # Extrude cut the text profiles starting from their sketch planes (which are tangent)
     extrudes = comp.features.extrudeFeatures
@@ -177,17 +184,17 @@ def engrave_dimentions(comp: adsk.fusion.Component, face: adsk.fusion.BRepFace) 
     # 1.5 mm depth (0.15 cm)
     distance_def = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(0.15))
     
+    # Extrude inner text (Negative direction goes inwards)
+    extInput_inner = extrudes.createInput(sketch_text_inner, adsk.fusion.FeatureOperations.CutFeatureOperation)
+    extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
+    extInput_inner.participantBodies = [body]
+    extrudes.add(extInput_inner)
+
     # Extrude outer text (Negative direction goes inwards)
     extInput_outer = extrudes.createInput(sketch_text_outer, adsk.fusion.FeatureOperations.CutFeatureOperation)
     extInput_outer.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.NegativeExtentDirection)
     extInput_outer.participantBodies = [body]
     extrudes.add(extInput_outer)
-        
-    # Extrude inner text (Positive direction goes inwards since plane is at Y = -R)
-    extInput_inner = extrudes.createInput(sketch_text_inner, adsk.fusion.FeatureOperations.CutFeatureOperation)
-    extInput_inner.setOneSideExtent(distance_def, adsk.fusion.ExtentDirections.PositiveExtentDirection)
-    extInput_inner.participantBodies = [body]
-    extrudes.add(extInput_inner)
 
 def create_inner_housing(design: adsk.fusion.Design) -> adsk.fusion.Component:
     rootComp = design.rootComponent
