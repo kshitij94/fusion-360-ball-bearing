@@ -3,15 +3,15 @@ import math
 import os
 from typing import Tuple, Optional
 
-HEIGHT = 0.6  # Height of the bearing in cm (6mm)
+HEIGHT = 0.7  # Height of the bearing in cm (6mm)
 dimention_text_height = HEIGHT - 0.2
 ball_diameter = 0.45  # Ball diameter in cm (4.5mm)
-offset_towards_z = 0.1
+offset_towards_z_outer_housing = 0.1
 outer_housing_outer_dia = 3.0 # default value
-outer_housing_thickness = 0.3
+outer_housing_thickness = 0.35
 outer_housing_inner_dia = 0.0
-offset_for_revolte_cut = 0.1
-inner_housing_thickness = 0.2
+offset_for_inner_housing = 0.1
+inner_housing_thickness = 0.3
 inner_housing_outer_dia = 0.0
 inner_housing_inner_dia = 0.0
 min_gap_between_separater_holes = 0.5
@@ -70,7 +70,7 @@ def create_common_outer_housing(design: adsk.fusion.Design, name: str, outer_dia
     
     # Sketch on XZ plane for the revolute cut
     sk_cut = comp.sketches.add(comp.xZConstructionPlane)
-    model_pt = adsk.core.Point3D.create(outer_housing_inner_dia / 2.0 - offset_towards_z, 0, HEIGHT / 2.0)
+    model_pt = adsk.core.Point3D.create(outer_housing_inner_dia / 2.0 - offset_towards_z_outer_housing, 0, HEIGHT / 2.0)
     sketch_pt = sk_cut.modelToSketchSpace(model_pt)
     sk_cut.sketchCurves.sketchCircles.addByCenterRadius(sketch_pt, ball_diameter / 2.0)
     
@@ -217,7 +217,7 @@ def create_inner_housing(design: adsk.fusion.Design) -> adsk.fusion.Component:
     # Sketch on XZ plane for the revolute cut
     sk_cut = comp.sketches.add(comp.xZConstructionPlane)
 
-    model_pt = adsk.core.Point3D.create(inner_housing_outer_dia / 2.0 + offset_for_revolte_cut, 0, HEIGHT / 2.0)
+    model_pt = adsk.core.Point3D.create(inner_housing_outer_dia / 2.0 + offset_for_inner_housing, 0, HEIGHT / 2.0)
     sketch_pt = sk_cut.modelToSketchSpace(model_pt)
     sk_cut.sketchCurves.sketchCircles.addByCenterRadius(sketch_pt, ball_diameter / 2.0) # radius is ball_diameter / 2.0
     
@@ -235,12 +235,21 @@ def create_inner_housing(design: adsk.fusion.Design) -> adsk.fusion.Component:
     return comp
 
 def compute_number_of_holes_in_separater(mid_dia: float) -> int:
-    # Constraint: Maximize the number of separator holes such that the centers
-    # are spaced so that the gap between any two adjacent holes of size
-    # 'ball_diameter' is at least 3mm (0.3cm).
+    # Scale the minimum gap dynamically with the size of the bearing.
+    # For small bearings, we want a smaller gap to provide enough support.
+    # For larger bearings, the gap scales up using a square root curve to keep 
+    # the ball count reasonable and reduce friction.
+    base_mid_dia = 1.875  # mid_dia corresponding to the default 3.0cm outer diameter
+    scaling_factor = math.sqrt(mid_dia / base_mid_dia)
+    
+    # Do not let the gap get smaller than 0.3 cm (3mm) to maintain structural integrity
+    dynamic_gap = max(0.3, min_gap_between_separater_holes * scaling_factor)
+    
     circumference = math.pi * mid_dia
-    num_holes = int(circumference / (separater_hole_diameter + min_gap_between_separater_holes))
-    return num_holes
+    num_holes = int(circumference / (separater_hole_diameter + dynamic_gap))
+    
+    # Ensure at least 4 balls are always used for support
+    return max(4, num_holes)
 
 def create_separator(design: adsk.fusion.Design) -> adsk.fusion.Component:
     rootComp = design.rootComponent
@@ -310,7 +319,7 @@ def create_separator(design: adsk.fusion.Design) -> adsk.fusion.Component:
 def create_cork(design: adsk.fusion.Design) -> adsk.fusion.Component:
     # Cork thickness is 0.5mm (0.05cm) less than the outer housing wall thickness.
     # Therefore, the temporary ring for the cork has outer_dia decreased by 2 * 0.05cm = 0.1cm.
-    cork_outer_dia = outer_housing_outer_dia - 0.1
+    cork_outer_dia = outer_housing_outer_dia - 0.05
     comp, _ = create_common_outer_housing(design, "Cork", outer_dia=cork_outer_dia)
     body = comp.bRepBodies.item(0)
     
@@ -367,9 +376,9 @@ def create_cork(design: adsk.fusion.Design) -> adsk.fusion.Component:
     
     prof_slot = sk_slot.profiles.item(0)
     
-    # Extrude cut the slot inwards by 0.5 mm (0.03 cm)
+    # Extrude cut the slot inwards by 1.5 mm (0.15 cm)
     ext_slot_in = comp.features.extrudeFeatures.createInput(prof_slot, adsk.fusion.FeatureOperations.CutFeatureOperation)
-    distance_def_slot = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(0.05))
+    distance_def_slot = adsk.fusion.DistanceExtentDefinition.create(adsk.core.ValueInput.createByReal(0.15))
     ext_slot_in.setOneSideExtent(distance_def_slot, adsk.fusion.ExtentDirections.NegativeExtentDirection)
     
     # Restrict cut to only cork body (after the intersect, there is only one body representing the cork)
@@ -397,6 +406,22 @@ def get_outer_housing_outer_dia(ui: adsk.core.UserInterface) -> Optional[float]:
 
     return val_float
 
+def save_stl(design: adsk.fusion.Design, components_to_export: list) -> list:
+    downloads_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
+    if not os.path.exists(downloads_dir):
+        downloads_dir = os.path.join(os.path.expanduser('~'), 'Desktop')
+
+    export_mgr = design.exportManager
+    exported_paths = []
+    for comp, name in components_to_export:
+        file_path = os.path.join(downloads_dir, f"{name}.stl")
+        stl_options = export_mgr.createSTLExportOptions(comp, file_path)
+        stl_options.meshRefinement = adsk.fusion.MeshRefinementSettings.MeshRefinementHigh
+        stl_options.sendToPrintUtility = False
+        export_mgr.execute(stl_options)
+        exported_paths.append(file_path)
+    return exported_paths
+
 def run(context: dict) -> None:
     ui = None
     try:
@@ -419,16 +444,26 @@ def run(context: dict) -> None:
         # Update globals with validated values
         outer_housing_outer_dia = outer_dia
         outer_housing_inner_dia = outer_housing_outer_dia - 2 * outer_housing_thickness
-        inner_housing_outer_dia = outer_housing_inner_dia - 0.22 * 2
+        inner_housing_outer_dia = outer_housing_inner_dia - (offset_towards_z_outer_housing + offset_for_inner_housing + 0.05) * 2
         inner_housing_inner_dia = round(inner_housing_outer_dia - 2 * inner_housing_thickness, 2)
         if inner_housing_inner_dia <= 0:
             ui.messageBox('The outer housing outer diameter is too small to fit the inner housing.', 'Error')
             return
 
-        create_outer_housing(design)
-        create_inner_housing(design)
-        create_separator(design)
-        create_cork(design)
+        comp_outer = create_outer_housing(design)
+        comp_inner = create_inner_housing(design)
+        comp_sep = create_separator(design)
+        comp_cork = create_cork(design)
+
+        components_to_export = [
+            (comp_outer, "Outer_Housing"),
+            (comp_inner, "Inner_Housing"),
+            (comp_sep, "Separator"),
+            (comp_cork, "Cork")
+        ]
+
+        exported_paths = save_stl(design, components_to_export)
+        ui.messageBox(f"Successfully generated models and saved STL files under Downloads:\n" + "\n".join(exported_paths), "Export Complete")
     except:
         if ui:
             ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
